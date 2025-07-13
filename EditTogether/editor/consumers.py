@@ -1,5 +1,6 @@
 # editor/consumers.py
 import json
+import aiohttp
 from channels.generic.websocket import AsyncWebsocketConsumer
 from rest_framework_simplejwt.tokens import AccessToken
 from .models import Document
@@ -21,6 +22,11 @@ class EditorConsumer(AsyncWebsocketConsumer):
             AccessToken(token)  # Validate token
             await self.channel_layer.group_add(self.room_group_name, self.channel_name)
             await self.accept()
+            try:
+                doc = await sync_to_async(Document.objects.latest)('updated_at')
+                await self.send(text_data=json.dumps({"message": doc.content}))
+            except Document.DoesNotExist:
+                await self.send(text_data=json.dumps({"message": ""}))
             print("WebSocket Connected!")
         except Exception as e:
             print(f"Token validation error: {str(e)}")
@@ -34,6 +40,26 @@ class EditorConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         data = json.loads(text_data)
         message = data.get("message")
+        # Grammar check using LanguageTool API
+        suggestions = []
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(
+                    'https://api.languagetool.org/v2/check',
+                    data={
+                        'text': message,
+                        'language': 'en-US',
+                    }
+                ) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        suggestions = [
+                            {"error": m['message'], "suggestions": [r['value'] for r in m.get('replacements', [])]}
+                            for m in result.get('matches', [])
+                        ]
+                        print(suggestions)
+            except Exception as e:
+                print(f"LanguageTool API error: {e}")
         # Save to database
         try:
             doc = await sync_to_async(Document.objects.latest)('updated_at')
@@ -44,9 +70,10 @@ class EditorConsumer(AsyncWebsocketConsumer):
         # Broadcast
         await self.channel_layer.group_send(
             self.room_group_name,
-            {"type": "editor_message", "message": message}
+            {"type": "editor_message", "message": message, "suggestions": suggestions}
         )
 
     async def editor_message(self, event):
         message = event["message"]
-        await self.send(text_data=json.dumps({"message": message}))
+        suggestions = event["suggestions"]
+        await self.send(text_data=json.dumps({"message": message, "suggestions": suggestions}))
