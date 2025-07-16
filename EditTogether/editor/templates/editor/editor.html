@@ -1,0 +1,47 @@
+<!-- editor/templates/editor/editor.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Real-Time Document Editor</title>
+</head>
+<body>
+    <h1>Live Document Editor</h1>
+    <textarea id="editor" rows="15" cols="100"></textarea>
+
+    <script>
+        // Get JWT token from localStorage
+        const token = localStorage.getItem('access_token');
+        console.log("Token:", token); // Debug token
+        if (!token) {
+            console.error("No JWT token found. Please log in.");
+            alert("Please log in to access the editor.");
+        }
+        const socket = new WebSocket('ws://' + window.location.host + '/ws/editor/?token=' + encodeURIComponent(token));
+
+        socket.onopen = function(e) {
+            console.log("WebSocket connected.");
+        };
+
+        socket.onerror = function(e) {
+            console.error("WebSocket error:", e);
+        };
+
+        socket.onclose = function(e) {
+            console.log("WebSocket closed:", e);
+        };
+
+        socket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            console.log("Received:", data.message);
+            document.getElementById('editor').value = data.message;
+        };
+
+        document.getElementById('editor').addEventListener('input', function(e) {
+            console.log("Sending:", e.target.value);
+            socket.send(JSON.stringify({
+                'message': e.target.value
+            }));
+        });
+    </script>
+</body>
+</html>

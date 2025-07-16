@@ -25,12 +25,13 @@ SECRET_KEY = 'django-insecure-kgs-kh=ue4*t^f&p&8px2hh+r8z$q(j1xabl_*w00o^v3-%_e5
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -38,10 +39,12 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
-
+    'channels', 
     #User_defined_Apps
-    'users'
+    'users',
+    'editor'
 ]
 
 MIDDLEWARE = [
@@ -57,9 +60,11 @@ MIDDLEWARE = [
 ROOT_URLCONF = 'EditTogether.urls'
 
 TEMPLATES = [
+    
     {
+        
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],  # if you're using a global templates folder
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -130,14 +135,19 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-ASGI_APPLICATION = "collab_project.asgi.application"
+ASGI_APPLICATION = "EditTogether.asgi.application"
+# CHANNEL_LAYERS = {
+#     'default': {
+#         'BACKEND': 'channels_redis.core.RedisChannelLayer',
+#         'CONFIG': {
+#             "hosts": [("127.0.0.1", 6379)],
+#         },
+#     },
+# }
 CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            "hosts": [("127.0.0.1", 6379)],
-        },
-    },
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer"
+    }
 }
 
 AUTH_USER_MODEL = 'users.CustomUser'
