@@ -1,11 +1,13 @@
 # editor/consumers.py
-import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from rest_framework_simplejwt.tokens import AccessToken
-from .models import Document
-from django.contrib.auth import get_user_model
-from urllib.parse import parse_qs
 from asgiref.sync import sync_to_async
+from .models import Document, User
+from urllib.parse import parse_qs
+import logging
+import json
+
+logger = logging.getLogger(__name__)
 
 class EditorConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -18,26 +20,32 @@ class EditorConsumer(AsyncWebsocketConsumer):
         token = query_params.get('token', [''])[0]
 
         try:
-            AccessToken(token)  # Validate token
+            access_token = AccessToken(token)
+            user_id = access_token['user_id']
+            user = await sync_to_async(User.objects.get)(id=user_id)
+            self.scope['user'] = user  # Set user in scope
+           
             await self.channel_layer.group_add(self.room_group_name, self.channel_name)
             await self.accept()
-            print("WebSocket Connected!")
+            logger.info("WebSocket Connected!")
         except Exception as e:
-            print(f"Token validation error: {str(e)}")
+            logger.info(f"Token validation error: {str(e)}")
             await self.close()
-            print("Invalid token")
+            logger.info("Invalid token")
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
-        print("WebSocket Disconnected!")
+        logger.info("WebSocket Disconnected!")
 
     async def receive(self, text_data):
         data = json.loads(text_data)
         message = data.get("message")
+        logger.info("message", message)
         # Save to database
         try:
             doc = await sync_to_async(Document.objects.latest)('updated_at')
             doc.content = message
+            doc.updated_by = self.scope['user']
             await sync_to_async(doc.save)()
         except Document.DoesNotExist:
             await sync_to_async(Document.objects.create)(content=message, updated_by=self.scope['user'])
